@@ -172,7 +172,7 @@ extern void draw_board ( map _map )
 
 	// initialized data
 	unsigned char _board[8] = { 0 };
-	bool should_dim   = (device_state.time % 5 == 0 );
+	bool should_dim   = (device_state.time % 10 < 5);
 	bool should_blink = ( (device_state.time / 250) % 2 == 0 );
 
 	// draw the horizontal segments
@@ -197,10 +197,38 @@ extern void draw_board ( map _map )
 		}
 
 		// todo: set the middle segment based on the horizontal[1] map
-		//
+		switch(_map.horizontal[1][i])
+		{
+			case STILL:
+				_board[i] |= 0;
+				break;
+			case HIT:
+				_board[i] |= SEG7_MIDDLE;
+				break;
+			case MISS:
+				_board[i] |= should_dim ? SEG7_MIDDLE : 0;
+				break;
+			case CURSOR:
+				_board[i] |= should_blink ? SEG7_MIDDLE : 0;
+				break;
+		}
 
 		// todo: set the bottom segment based on the horizontal[2] map
-		//
+		switch(_map.horizontal[2][i])
+		{
+			case STILL:
+				_board[i] |= 0;
+				break;
+			case HIT:
+				_board[i] |= SEG7_BOTTOM;
+				break;
+			case MISS:
+				_board[i] |= should_dim ? SEG7_BOTTOM : 0;
+				break;
+			case CURSOR:
+				_board[i] |= should_blink ? SEG7_BOTTOM : 0;
+				break;
+		}
 	}
 
 	// draw the vertical segments
@@ -208,16 +236,72 @@ extern void draw_board ( map _map )
 	{
 
 		// todo: set the top left segment based on the vertical[0] map
-		//
+		switch(_map.vertical[0][2 * i])
+		{
+			case STILL:
+				_board[i] |= 0;
+				break;
+			case HIT:
+				_board[i] |= SEG7_TOP_LEFT;
+				break;
+			case MISS:
+				_board[i] |= should_dim ? SEG7_TOP_LEFT : 0;
+				break;
+			case CURSOR:
+				_board[i] |= should_blink ? SEG7_TOP_LEFT : 0;
+				break;
+		}
 
 		// todo: set the top right segment based on the vertical[0] map
-		//
+		switch(_map.vertical[0][2 * i + 1])
+		{
+			case STILL:
+				_board[i] |= 0;
+				break;
+			case HIT:
+				_board[i] |= SEG7_TOP_RIGHT;
+				break;
+			case MISS:
+				_board[i] |= should_dim ? SEG7_TOP_RIGHT : 0;
+				break;
+			case CURSOR:
+				_board[i] |= should_blink ? SEG7_TOP_RIGHT : 0;
+				break;
+		}
 
 		// todo: set the bottom left segment based on the vertical[1] map
-		//
+		switch(_map.vertical[1][2 * i])
+		{
+			case STILL:
+				_board[i] |= 0;
+				break;
+			case HIT:
+				_board[i] |= SEG7_BOTTOM_LEFT;
+				break;
+			case MISS:
+				_board[i] |= should_dim ? SEG7_BOTTOM_LEFT : 0;
+				break;
+			case CURSOR:
+				_board[i] |= should_blink ? SEG7_BOTTOM_LEFT : 0;
+				break;
+		}
 
 		// todo: set the bottom right segment based on the vertical[1] map
-		//
+		switch(_map.vertical[1][2 * i + 1])
+		{
+			case STILL:
+				_board[i] |= 0;
+				break;
+			case HIT:
+				_board[i] |= SEG7_BOTTOM_RIGHT;
+				break;
+			case MISS:
+				_board[i] |= should_dim ? SEG7_BOTTOM_RIGHT : 0;
+				break;
+			case CURSOR:
+				_board[i] |= should_blink ? SEG7_BOTTOM_RIGHT : 0;
+				break;
+		}
 
 	}
 
