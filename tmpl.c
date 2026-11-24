@@ -7,7 +7,23 @@
  */
 
 // headers
+#include <string.h>
 #include "tmpl.h"
+
+// board configuration -- change these if your wiring differs
+#define SWITCH_IDR  ( GPIOC->IDR )// register the slider switches
+#define SW_LAYER_MASK ( 1u << 0 )// slider switch: 0 horizontal segments, 1 vertical pqa
+#define BUTTON_PIN  ( 10 ) // PC10 confirm / place / fire
+#define BUTTON_DOWN_LEVEL ( 0 ) // pin level while a pushbutton is held
+#define DEBOUNCE_MS  ( 20 ) // pushbutton debounce time
+#define SCROLL_MS ( 200 ) // marquee scroll speed (ms per character)
+#define POT_X ( 0 ) //cursor column
+#define POT_Y ( 1 )//cursor row
+
+// game rules
+#define SINGLE_BOATS ( 3 )
+#define DOUBLE_BOATS ( 2 )
+#define MESSAGE_MAX ( 32 )
 
 // forward declarations
 static void poll_switches ( void );
@@ -127,28 +143,102 @@ extern void input_poll ( void )
 	// poll the potentiometers
 	poll_potentiometers();
 
-	// todo: poll any other input devices
-	//
-
 	// done
 	return;
+}
+
+// returns the new (debounced) level of a pushbutton
+static bool debounce ( debounce_t *p, bool sample, bool level )
+{
+	if ( sample != p->raw )
+	{
+		p->raw = sample;
+		p->t   = device_state.time;
+	}
+	else if ( sample != level && ( device_state.time - p->t ) >= DEBOUNCE_MS )
+		level = sample;
+
+	return level;
 }
 
 static void poll_switches ( void )
 {
 
-	// todo: store the state of the switches in device_state.sw
-	//
+	// static data
+	static debounce_t db10, db11;
+
+	// initialized data
+	bool pc10, pc11;
+
+	// store the state of the switches in device_state.sw
+	device_state.sw = (unsigned short) SWITCH_IDR;
+
+	// the pushbuttons
+	pc10 = debounce( &db10, ( ( GPIOC->IDR >> BUTTON_PIN  ) & 1 ) == BUTTON_DOWN_LEVEL, device_state.pc10 );
+	pc11 = debounce( &db11, ( ( GPIOC->IDR >> BUTTON2_PIN ) & 1 ) == BUTTON_DOWN_LEVEL, device_state.pc11 );
+
+	// remember each new press of PC10 until the game logic consumes it
+	if ( pc10 && !device_state.pc10 )
+		pc10_edge = true;
+
+	device_state.pc10 = pc10;
+	device_state.pc11 = pc11;
 
 	// done
 	return;
 }
 
+// one-time ADC1 setup for PA1..PA3
+static void adc_init ( void )
+{
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+	RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
+
+	// PA1, PA2, PA3 -> analog mode
+	GPIOA->MODER |= ( 3u << ( 1 * 2 ) ) | ( 3u << ( 2 * 2 ) ) | ( 3u << ( 3 * 2 ) );
+
+	// ADC clock = PCLK2 / 4 (the F407 ADC must stay at or below 36 MHz)
+	ADC->CCR = ( ADC->CCR & ~ADC_CCR_ADCPRE ) | ADC_CCR_ADCPRE_0;
+
+	// long sample time on channels 1, 2, 3
+	ADC1->SMPR2 |= ( 7u << 3 ) | ( 7u << 6 ) | ( 7u << 9 );
+
+	// turn the ADC on
+	ADC1->CR2 |= ADC_CR2_ADON;
+}
+
+static unsigned short adc_read ( unsigned int channel )
+{
+
+	// initialized data
+	unsigned int timeout = 20000;
+
+	// one conversion, on the requested channel
+	ADC1->SQR3 = channel;
+	ADC1->CR2 |= ADC_CR2_SWSTART;
+
+	// wait for the end of conversion (bounded so we can never hang the interrupt)
+	while ( !( ADC1->SR & ADC_SR_EOC ) && timeout-- );
+
+	// reading DR clears EOC
+	return (unsigned short) ADC1->DR;
+}
+
 static void poll_potentiometers ( void )
 {
 
-	// todo: iterate through each potentiometer and store the value in the corresponding index of device_state._pa
-	//
+	// static data
+	static bool initialized = false;
+
+	if ( !initialized )
+	{
+		adc_init();
+		initialized = true;
+	}
+
+	// iterate through each potentiometer and store the value in the corresponding index of device_state._pa
+	for ( unsigned int i = 0; i < 3; i++ )
+		device_state._pa[i] = adc_read( i + 1 ); // PA1 -> ADC channel 1, etc.
 
 	// done
 	return;
@@ -157,8 +247,6 @@ static void poll_potentiometers ( void )
 extern void timer_step ( void )
 {
 
-	// todo: call this function from the SysTick handler
-	//
 
 	// increment the time
 	device_state.time++;
@@ -196,7 +284,6 @@ extern void draw_board ( map _map )
 				break;
 		}
 
-		// todo: set the middle segment based on the horizontal[1] map
 		switch(_map.horizontal[1][i])
 		{
 			case STILL:
@@ -213,7 +300,6 @@ extern void draw_board ( map _map )
 				break;
 		}
 
-		// todo: set the bottom segment based on the horizontal[2] map
 		switch(_map.horizontal[2][i])
 		{
 			case STILL:
@@ -235,7 +321,7 @@ extern void draw_board ( map _map )
 	for (size_t i = 0; i < 8; i++)
 	{
 
-		// todo: set the top left segment based on the vertical[0] map
+
 		switch(_map.vertical[0][2 * i])
 		{
 			case STILL:
@@ -252,7 +338,7 @@ extern void draw_board ( map _map )
 				break;
 		}
 
-		// todo: set the top right segment based on the vertical[0] map
+
 		switch(_map.vertical[0][2 * i + 1])
 		{
 			case STILL:
@@ -269,7 +355,7 @@ extern void draw_board ( map _map )
 				break;
 		}
 
-		// todo: set the bottom left segment based on the vertical[1] map
+
 		switch(_map.vertical[1][2 * i])
 		{
 			case STILL:
@@ -286,7 +372,6 @@ extern void draw_board ( map _map )
 				break;
 		}
 
-		// todo: set the bottom right segment based on the vertical[1] map
 		switch(_map.vertical[1][2 * i + 1])
 		{
 			case STILL:
@@ -387,61 +472,33 @@ extern void game_logic ( void )
 	return;
 }
 
-void state_start ( void ) 
-{
-
-	// todo
-	//
-
-	// done
-	return;
-}
-
-void state_p1_place ( void ) 
-{
-
-	// todo
-	//
-
-	// done
-	return;
-}
-
-void state_p2_place ( void ) 
-{
-
-	// todo
-	//
-
-	// done
-	return;
-}
-
 void state_p1_turn ( void ) 
 {
-
-	// todo
-	//
-
-	// done
+	turn_step( PLAYER_A );
 	return;
 }
 
 void state_p2_turn ( void ) 
 {
-
-	// todo
-	//
-
-	// done
+	turn_step( PLAYER_B );
 	return;
 }
 
 void state_result ( void ) 
 {
 
-	// todo
-	//
+	if ( state_fresh )
+	{
+		state_fresh = false;
+
+		// declare the winner until someone presses PC10
+		announce( winner == PLAYER_A ? "P1 WINS" : "P2 WINS", true );
+		sound_win();
+	}
+
+	// PC10 goes back to the title screen
+	if ( button_pressed() )
+		state_done = true;
 
 	// done
 	return;
